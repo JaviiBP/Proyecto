@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Diagrama de Transiciones Automatas </title>
+  <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
+  <script src="https://unpkg.com/cytoscape@3.27.0/dist/cytoscape.min.js"></script>
+  <script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background:#f8fafc; color:#0f172a; margin:0; padding:16px; }
+    h1 { font-size:1.5rem; margin:0 0 12px; }
+    textarea { width:100%; height:160px; padding:10px; border-radius:10px; border:1px solid #cbd5e1; margin:6px 0 12px; }
+    button { padding:8px 14px; border:none; border-radius:10px; background:#0f172a; color:#fff; cursor:pointer; }
+    button:hover { opacity:.92; }
+    #cy { width:100%; height:520px; border:1px solid #cbd5e1; border-radius:10px; background:#fff; }
+  </style>
+</head>
+<body>
+  <h1>Diagrama de transiciones Fase 1</h1>
+
+  <label for="strings">Ingrese las Cadenas</label>
+  <textarea id="strings">abba</textarea>
+
+  <button id="btnGen">Generar</button>
+
+  <div id="cy"></div>
+
+  <script>
+    if (typeof window.cytoscape !== 'undefined' && typeof window.cytoscapeDagre !== 'undefined') {
+      try { window.cytoscape.use(window.cytoscapeDagre); } catch (e) {}
+    }
+
+    function buildAutomaton(strings) {
+      const startId = 0;
+      let nextId = 1;
+      const nodes = new Map();
+      const trans = new Map(); 
+      let edgeAutoId = 0;
+
+      const ensureNode = (id) => {
+        if (!nodes.has(id)) nodes.set(id, { id, accept: false });
+        return nodes.get(id);
+      };
+      const edgeMap = (from) => {
+        if (!trans.has(from)) trans.set(from, new Map());
+        return trans.get(from);
+      };
+
+      ensureNode(startId);
+
+      for (const raw of strings) {
+        const s = (raw || '').trim();
+        if (!s) continue;
+        const tokens = Array.from(s);
+        let current = startId;
+        for (const sym of tokens) {
+          const em = edgeMap(current);
+          if (!em.has(sym)) {
+            const to = nextId++;
+            em.set(sym, to);
+            ensureNode(to);
+            current = to;
+          } else {
+            current = em.get(sym);
+          }
+        }
+        ensureNode(current).accept = true;
+      }
+
+      const elements = [];
+      for (const [id, node] of nodes) {
+        elements.push({ data: { id: `q${id}`, label: `q${id}`, accept: node.accept ? 1 : 0 } });
+      }
+      for (const [from, em] of trans) {
+        for (const [sym, to] of em) {
+          elements.push({ data: { id: `e${edgeAutoId++}`, source: `q${from}`, target: `q${to}`, label: sym } });
+        }
+      }
+      return { elements };
+    }
+
+    let cy;
+
+    function render(elements) {
+      if (cy) { cy.destroy(); cy = null; }
+      cy = cytoscape({
+        container: document.getElementById('cy'),
+        elements,
+        layout: { name: 'dagre', rankDir: 'LR', nodeSep: 30, rankSep: 60, edgeSep: 8 },
+        style: [
+          { selector: 'node', style: {
+              'label': 'data(label)',
+              'text-valign': 'center', 'text-halign': 'center',
+              'background-color': '#fff', 'border-width': 2, 'border-color': '#0f172a',
+              'width': 48, 'height': 48, 'font-size': 12
+            } },
+          { selector: 'node[accept > 0]', style: { 'border-width': 6, 'border-color': '#0ea5e9' } },
+          { selector: 'edge', style: {
+              'width': 2, 'curve-style': 'bezier',
+              'target-arrow-shape': 'triangle', 'target-arrow-color': '#0f172a', 'line-color': '#0f172a',
+              'label': 'data(label)', 'font-size': 12, 'text-rotation': 'autorotate',
+              'text-background-color': '#fff', 'text-background-opacity': 1, 'text-background-padding': 2
+            } }
+        ]
+      });
+      cy.ready(() => cy.fit(undefined, 30));
+      window.addEventListener('resize', () => { if (cy) { cy.resize(); cy.fit(undefined, 30); } });
+    }
+
+    function generate() {
+      const raw = document.getElementById('strings').value.split(/\r?\n/);
+      const { elements } = buildAutomaton(raw);
+      render(elements);
+    }
+
+    document.getElementById('btnGen').addEventListener('click', generate);
+    document.addEventListener('DOMContentLoaded', generate);
+  </script>
+</body>
+</html>
